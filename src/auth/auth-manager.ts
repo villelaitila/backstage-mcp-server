@@ -13,6 +13,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import axios, { AxiosResponse } from 'axios';
+import { readFileSync } from 'fs';
 
 import { AuthConfig, TokenInfo } from '../types/auth.js';
 import { isNonEmptyString, isNullOrUndefined, isNumber } from '../utils/core/guards.js';
@@ -132,11 +133,17 @@ export class AuthManager {
    * @private
    */
   private async handleBearerToken(): Promise<TokenInfo> {
-    if (!isNonEmptyString(this.config.token)) {
+    let token = this.config.token;
+
+    if (isNonEmptyString(this.config.tokenFile)) {
+      token = readFileSync(this.config.tokenFile, 'utf-8').trim();
+    }
+
+    if (!isNonEmptyString(token)) {
       throw new ConfigurationError('Bearer token not configured');
     }
     return {
-      accessToken: this.config.token,
+      accessToken: token,
       tokenType: 'Bearer',
     };
   }

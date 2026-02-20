@@ -24,6 +24,7 @@ jest.mock('../utils/core/logger.js', () => ({
 }));
 
 import axios, { AxiosResponse } from 'axios';
+import { writeFileSync, unlinkSync } from 'fs';
 
 import { AuthConfig, TokenInfo } from '../types/auth.js';
 import { AuthManager } from './auth-manager.js';
@@ -152,6 +153,53 @@ describe('AuthManager', () => {
         authManager = new AuthManager(config);
 
         await expect(authManager.getAuthorizationHeader()).rejects.toThrow('Bearer token not configured');
+      });
+
+      describe('token file', () => {
+        const tokenFilePath = '/tmp/test-backstage-token.txt';
+
+        afterEach(() => {
+          try { unlinkSync(tokenFilePath); } catch {}
+        });
+
+        it('should read token from file', async () => {
+          writeFileSync(tokenFilePath, 'file-token\n');
+          config = { type: 'bearer', tokenFile: tokenFilePath };
+          authManager = new AuthManager(config);
+
+          const header = await authManager.getAuthorizationHeader();
+          expect(header).toBe('Bearer file-token');
+        });
+
+        it('should read updated token on next call', async () => {
+          writeFileSync(tokenFilePath, 'token-v1');
+          config = { type: 'bearer', tokenFile: tokenFilePath };
+          authManager = new AuthManager(config);
+
+          const header1 = await authManager.getAuthorizationHeader();
+          expect(header1).toBe('Bearer token-v1');
+
+          writeFileSync(tokenFilePath, 'token-v2');
+          (authManager as unknown as AuthManagerWithPrivate).tokenInfo = undefined;
+
+          const header2 = await authManager.getAuthorizationHeader();
+          expect(header2).toBe('Bearer token-v2');
+        });
+
+        it('should throw error if token file does not exist', async () => {
+          config = { type: 'bearer', tokenFile: '/nonexistent/path.txt' };
+          authManager = new AuthManager(config);
+
+          await expect(authManager.getAuthorizationHeader()).rejects.toThrow('ENOENT');
+        });
+
+        it('should throw error if token file is empty', async () => {
+          writeFileSync(tokenFilePath, '');
+          config = { type: 'bearer', tokenFile: tokenFilePath };
+          authManager = new AuthManager(config);
+
+          await expect(authManager.getAuthorizationHeader()).rejects.toThrow('Bearer token not configured');
+        });
       });
     });
 
