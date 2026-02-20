@@ -27,6 +27,7 @@ describe('server', () => {
     delete process.env.BACKSTAGE_TOKEN_URL;
     delete process.env.BACKSTAGE_API_KEY;
     delete process.env.BACKSTAGE_SERVICE_ACCOUNT_KEY;
+    delete process.env.BACKSTAGE_TOKEN_FILE;
   });
 
   describe('buildAuthConfig', () => {
@@ -89,6 +90,25 @@ describe('server', () => {
 
     it('should throw error when no auth config', () => {
       expect(() => buildAuthConfig()).toThrow('No valid authentication configuration found');
+    });
+
+    it('should build bearer auth config with token file', () => {
+      process.env.BACKSTAGE_TOKEN_FILE = '/path/to/token.txt';
+      const result = buildAuthConfig();
+      expect(result).toEqual({
+        type: 'bearer',
+        tokenFile: '/path/to/token.txt',
+      });
+    });
+
+    it('should prioritize token file over static token', () => {
+      process.env.BACKSTAGE_TOKEN_FILE = '/path/to/token.txt';
+      process.env.BACKSTAGE_TOKEN = 'static-token';
+      const result = buildAuthConfig();
+      expect(result).toEqual({
+        type: 'bearer',
+        tokenFile: '/path/to/token.txt',
+      });
     });
 
     it('should throw error for incomplete oauth', () => {

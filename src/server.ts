@@ -95,6 +95,7 @@ export async function startServer(): Promise<void> {
  * @throws ConfigurationError if no valid authentication configuration is found
  */
 export function buildAuthConfig(): AuthConfig {
+  const tokenFile = process.env.BACKSTAGE_TOKEN_FILE;
   const token = process.env.BACKSTAGE_TOKEN;
   const clientId = process.env.BACKSTAGE_CLIENT_ID;
   const clientSecret = process.env.BACKSTAGE_CLIENT_SECRET;
@@ -102,6 +103,9 @@ export function buildAuthConfig(): AuthConfig {
   const apiKey = process.env.BACKSTAGE_API_KEY;
   const serviceAccountKey = process.env.BACKSTAGE_SERVICE_ACCOUNT_KEY;
 
+  if (isNonEmptyString(tokenFile)) {
+    return { type: 'bearer', tokenFile };
+  }
   if (isNonEmptyString(token)) {
     return { type: 'bearer', token };
   }
