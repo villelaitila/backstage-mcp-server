@@ -15,6 +15,7 @@
 export interface AuthConfig {
   type: 'bearer' | 'oauth' | 'api-key' | 'service-account';
   token?: string;
+  tokenFile?: string;
   clientId?: string;
   clientSecret?: string;
   tokenUrl?: string;
