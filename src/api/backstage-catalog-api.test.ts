@@ -443,16 +443,28 @@ describe('BackstageCatalogApi', () => {
     const entityRef = 'component:default/test';
     const mockLocation = { type: 'url', target: 'http://example.com' } as unknown as Location;
 
-    it('should get location by entity ref', async () => {
+    it('should GET /locations/by-entity/{kind}/{namespace}/{name} with split path segments', async () => {
+      mockedEntityRef.parse.mockReturnValue({ kind: 'component', namespace: 'default', name: 'test' });
       mockClient.get.mockResolvedValueOnce(axiosResponse<Location>(mockLocation));
 
       const result = await api.getLocationByEntity(entityRef);
 
-      expect(mockClient.get).toHaveBeenCalledWith(`/locations/by-entity/${encodeURIComponent(entityRef)}`);
+      // Backstage's real path uses three encoded segments (probe 15), not a single encoded ref.
+      expect(mockClient.get).toHaveBeenCalledWith('/locations/by-entity/component/default/test');
       expect(result).toBe(mockLocation);
     });
 
+    it('should accept a CompoundEntityRef object and emit split path segments', async () => {
+      mockClient.get.mockResolvedValueOnce(axiosResponse<Location>(mockLocation));
+
+      await api.getLocationByEntity({ kind: 'API', namespace: 'default', name: 'example-api' });
+
+      // Each segment must be URL-encoded individually.
+      expect(mockClient.get).toHaveBeenCalledWith('/locations/by-entity/API/default/example-api');
+    });
+
     it('should return undefined on 404', async () => {
+      mockedEntityRef.parse.mockReturnValue({ kind: 'component', namespace: 'default', name: 'test' });
       const error = { response: { status: 404 } };
       mockClient.get.mockRejectedValue(error);
 

@@ -413,9 +413,12 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     entityRef: string | CompoundEntityRef,
     _options?: CatalogRequestOptions
   ): Promise<Location | undefined> {
-    const refString = isString(entityRef) ? String(entityRef) : this.formatCompoundEntityRef(entityRef);
+    // Backstage's real path takes three split segments: /locations/by-entity/{kind}/{ns}/{name}
+    // (probes 15/27). The previous single-encoded-compound-ref form returns 404.
+    const compound = isString(entityRef) ? EntityRef.parse(entityRef) : entityRef;
+    const path = `/locations/by-entity/${encodeURIComponent(compound.kind)}/${encodeURIComponent(compound.namespace)}/${encodeURIComponent(compound.name)}`;
     try {
-      const { data } = await this.client.get<Location>(`/locations/by-entity/${encodeURIComponent(refString)}`);
+      const { data } = await this.client.get<Location>(path);
       return data;
     } catch (error) {
       const status = this.extractResponseStatus(error);
