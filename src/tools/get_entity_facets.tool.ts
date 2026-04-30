@@ -20,14 +20,10 @@ import { z } from 'zod';
 import { Tool } from '../decorators/tool.decorator.js';
 import { ApiStatus } from '../types/apis.js';
 import { ToolName } from '../types/constants.js';
+import { entityFilterSchema } from '../types/filter.schema.js';
 import { IToolRegistrationContext } from '../types/tools.js';
 import { JsonToTextResponse } from '../utils/formatting/responses.js';
 import { ToolErrorHandler } from '../utils/tools/tool-error-handler.js';
-
-const entityFilterSchema = z.object({
-  key: z.string(),
-  values: z.array(z.string()),
-});
 
 const paramsSchema = z.object({
   filter: z.array(entityFilterSchema).optional(),

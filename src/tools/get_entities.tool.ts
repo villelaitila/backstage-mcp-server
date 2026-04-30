@@ -22,15 +22,11 @@ import { inputSanitizer } from '../auth/input-sanitizer.js';
 import { Tool } from '../decorators/tool.decorator.js';
 import { ApiStatus } from '../types/apis.js';
 import { ToolName } from '../types/constants.js';
+import { entityFilterSchema } from '../types/filter.schema.js';
 import { IToolRegistrationContext } from '../types/tools.js';
 import { logger } from '../utils/core/logger.js';
 import { JsonToTextResponse } from '../utils/formatting/responses.js';
 import { ToolErrorHandler } from '../utils/tools/tool-error-handler.js';
-
-const entityFilterSchema = z.object({
-  key: z.string(),
-  values: z.array(z.string()),
-});
 
 const paramsSchema = z.object({
   filter: z.array(entityFilterSchema).optional(),
@@ -56,7 +52,8 @@ export class GetEntitiesTool {
       async (req: z.infer<typeof paramsSchema>, ctx: IToolRegistrationContext) => {
         logger.debug('Executing get_entities tool', { request: req });
 
-        // Sanitize and validate inputs
+        // Sanitize and validate inputs. `format` is an MCP-side response-shape flag and must not
+        // leak into the Backstage query string — Backstage rejects unknown params with HTTP 400.
         const sanitizedRequest = {
           filter: req.filter ? inputSanitizer.sanitizeFilter(req.filter) : undefined,
           fields: req.fields
@@ -66,7 +63,6 @@ export class GetEntitiesTool {
             : undefined,
           limit: req.limit,
           offset: req.offset,
-          format: req.format,
         };
 
         if (req.format === 'jsonapi') {

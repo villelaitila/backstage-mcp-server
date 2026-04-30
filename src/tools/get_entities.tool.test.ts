@@ -108,7 +108,6 @@ describe('GetEntitiesTool', () => {
         fields: request.fields,
         limit: request.limit,
         offset: request.offset,
-        format: request.format,
       });
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
@@ -161,7 +160,7 @@ describe('GetEntitiesTool', () => {
         filter: request.filter,
         fields: undefined,
         limit: request.limit,
-        format: request.format,
+        offset: undefined,
       });
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
