@@ -39,7 +39,11 @@ const paramsSchema = z.object({
   fields: z.array(z.string()).optional(),
   limit: z.number().optional(),
   offset: z.number().optional(),
+  // Legacy single-order shape — kept for backwards compatibility with existing callers.
   order: entityOrderSchema.optional(),
+  // Canonical shape (matches `@backstage/catalog-client`'s `EntityOrderQuery` array form).
+  // Each entry becomes its own `orderField=<order>,<field>` query token.
+  orderFields: z.array(entityOrderSchema).optional(),
 });
 
 @Tool({

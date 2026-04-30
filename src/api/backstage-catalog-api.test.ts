@@ -191,18 +191,65 @@ describe('BackstageCatalogApi', () => {
   });
 
   describe('queryEntities', () => {
-    const request: QueryEntitiesRequest = { filter: { kind: 'Component' } };
     const mockResponse = {
       items: [{ kind: 'Component', apiVersion: 'backstage.io/v1beta1', metadata: { name: 'test' } }],
+      totalItems: 1,
+      pageInfo: {},
     } as unknown as QueryEntitiesResponse;
 
-    it('should post to /entities/query and return data', async () => {
-      mockClient.post.mockResolvedValueOnce(axiosResponse(mockResponse));
+    it('should GET /entities/by-query with passthrough params (real Backstage endpoint)', async () => {
+      const request = {
+        filter: [{ key: 'kind', values: ['component'] }],
+        fields: ['metadata.name', 'kind'],
+        limit: 5,
+        offset: 0,
+      } as unknown as QueryEntitiesRequest;
+      mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
 
       const result = await api.queryEntities(request);
 
-      expect(mockClient.post).toHaveBeenCalledWith('/entities/query', request);
+      expect(mockClient.get).toHaveBeenCalledWith(
+        '/entities/by-query',
+        expect.objectContaining({
+          params: expect.objectContaining({
+            // Backstage's `fields` query param is a single comma-separated string (probe 05).
+            filter: [{ key: 'kind', values: ['component'] }],
+            fields: 'metadata.name,kind',
+            limit: 5,
+            offset: 0,
+          }),
+        })
+      );
       expect(result).toBe(mockResponse);
+    });
+
+    it('should translate legacy { order: { field, order } } into orderField=order,field tokens', async () => {
+      const request = {
+        order: { field: 'metadata.name', order: 'asc' },
+      } as unknown as QueryEntitiesRequest;
+      mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
+
+      await api.queryEntities(request);
+
+      const callArgs = mockClient.get.mock.calls[0];
+      const params = (callArgs[1] as { params: Record<string, unknown> }).params;
+      expect(params.orderField).toEqual(['asc,metadata.name']);
+    });
+
+    it('should translate orderFields array into multiple orderField tokens', async () => {
+      const request = {
+        orderFields: [
+          { field: 'metadata.name', order: 'asc' },
+          { field: 'kind', order: 'desc' },
+        ],
+      } as unknown as QueryEntitiesRequest;
+      mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
+
+      await api.queryEntities(request);
+
+      const callArgs = mockClient.get.mock.calls[0];
+      const params = (callArgs[1] as { params: Record<string, unknown> }).params;
+      expect(params.orderField).toEqual(['asc,metadata.name', 'desc,kind']);
     });
   });
 

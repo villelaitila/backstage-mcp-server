@@ -220,8 +220,71 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     request?: QueryEntitiesRequest,
     _options?: CatalogRequestOptions
   ): Promise<QueryEntitiesResponse> {
-    const { data } = await this.client.post<QueryEntitiesResponse>('/entities/query', request);
+    // Real Backstage endpoint per @backstage/catalog-client OpenAPI:
+    //   GET /entities/by-query{?fields,limit,offset,orderField*,cursor,filter*,fullTextFilterTerm,fullTextFilterFields}
+    // Each `orderField` token is encoded as `<order>,<field>` (e.g. `asc,metadata.name`).
+    const params = this.buildQueryEntitiesParams(request);
+    const { data } = await this.client.get<QueryEntitiesResponse>('/entities/by-query', { params });
     return data;
+  }
+
+  /** Translate the MCP-side QueryEntitiesRequest into Backstage `/entities/by-query` query params. */
+  private buildQueryEntitiesParams(request?: QueryEntitiesRequest): Record<string, unknown> {
+    if (!request) return {};
+    const { fields, limit, offset, filter, fullTextFilter } = request as Record<string, unknown> as {
+      fields?: string[];
+      limit?: number;
+      offset?: number;
+      filter?: unknown;
+      fullTextFilter?: { term?: string; fields?: string[] };
+    };
+    const params: Record<string, unknown> = {};
+    if (Array.isArray(fields) && fields.length > 0) params.fields = fields.join(',');
+    if (isNumber(limit)) params.limit = limit;
+    if (isNumber(offset)) params.offset = offset;
+    if (isDefined(filter)) params.filter = filter;
+    if (fullTextFilter?.term) params.fullTextFilterTerm = fullTextFilter.term;
+    if (Array.isArray(fullTextFilter?.fields) && fullTextFilter.fields.length > 0) {
+      params.fullTextFilterFields = fullTextFilter.fields.join(',');
+    }
+
+    // orderFields (array, canonical) wins over legacy `order` (single object). Both supported.
+    const orderTokens = this.collectOrderFieldTokens(request as Record<string, unknown>);
+    if (orderTokens.length > 0) params.orderField = orderTokens;
+
+    // Cursor-based requests carry `cursor` instead of orderFields/filter (mutually exclusive
+    // per OpenAPI spec). Pass through verbatim if present.
+    const cursor = (request as Record<string, unknown>).cursor;
+    if (typeof cursor === 'string' && cursor.length > 0) params.cursor = cursor;
+    return params;
+  }
+
+  private collectOrderFieldTokens(request: Record<string, unknown>): string[] {
+    const tokens: string[] = [];
+    const orderFields = request.orderFields;
+    if (Array.isArray(orderFields)) {
+      for (const o of orderFields) {
+        if (o && typeof o === 'object' && 'field' in o) {
+          const { field, order } = o as { field?: string; order?: string };
+          if (typeof field === 'string') tokens.push(`${order ?? 'asc'},${field}`);
+        }
+      }
+    } else if (orderFields && typeof orderFields === 'object' && 'field' in (orderFields as object)) {
+      const { field, order } = orderFields as { field?: string; order?: string };
+      if (typeof field === 'string') tokens.push(`${order ?? 'asc'},${field}`);
+    }
+    // Legacy single-order shape from the MCP tool (`order: { field, order }`).
+    const legacyOrder = request.order;
+    if (
+      tokens.length === 0 &&
+      legacyOrder &&
+      typeof legacyOrder === 'object' &&
+      'field' in (legacyOrder as object)
+    ) {
+      const { field, order } = legacyOrder as { field?: string; order?: string };
+      if (typeof field === 'string') tokens.push(`${order ?? 'asc'},${field}`);
+    }
+    return tokens;
   }
 
   async getEntityAncestors(
