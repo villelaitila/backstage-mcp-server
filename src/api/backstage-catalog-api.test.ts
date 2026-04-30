@@ -334,16 +334,37 @@ describe('BackstageCatalogApi', () => {
   });
 
   describe('getEntityFacets', () => {
-    const request: GetEntityFacetsRequest = { facets: ['kind'] };
     const mockResponse = { facets: {} } as unknown as GetEntityFacetsResponse;
 
-    it('should post to /entities/facets and return data', async () => {
-      mockClient.post.mockResolvedValueOnce(axiosResponse(mockResponse));
+    it('should GET /entity-facets with repeated facet query params (real Backstage endpoint)', async () => {
+      const request: GetEntityFacetsRequest = { facets: ['kind', 'spec.type'] };
+      mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
 
       const result = await api.getEntityFacets(request);
 
-      expect(mockClient.post).toHaveBeenCalledWith('/entities/facets', request);
+      expect(mockClient.get).toHaveBeenCalledWith(
+        '/entity-facets',
+        expect.objectContaining({
+          // Note: param is singular `facet` (probe 11), not plural `facets`.
+          params: expect.objectContaining({ facet: ['kind', 'spec.type'] }),
+        })
+      );
       expect(result).toBe(mockResponse);
+    });
+
+    it('should pass filter through alongside facet params', async () => {
+      const request: GetEntityFacetsRequest = {
+        facets: ['kind'],
+        filter: [{ key: 'kind', values: ['component'] }] as unknown as GetEntityFacetsRequest['filter'],
+      };
+      mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
+
+      await api.getEntityFacets(request);
+
+      const callArgs = mockClient.get.mock.calls[0];
+      const params = (callArgs[1] as { params: Record<string, unknown> }).params;
+      expect(params.facet).toEqual(['kind']);
+      expect(params.filter).toEqual([{ key: 'kind', values: ['component'] }]);
     });
   });
 

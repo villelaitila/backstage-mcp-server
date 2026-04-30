@@ -356,7 +356,17 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     request: GetEntityFacetsRequest,
     _options?: CatalogRequestOptions
   ): Promise<GetEntityFacetsResponse> {
-    const { data } = await this.client.post<GetEntityFacetsResponse>('/entities/facets', request);
+    // Real Backstage endpoint: GET /entity-facets{?facet*,filter*} (note: no `/entities/` prefix,
+    // and the query param is singular `facet`). See docs/api-probe/findings.md probe 11 and the
+    // canonical client URI template at @backstage/catalog-client Api.client.cjs.js:192.
+    const params: Record<string, unknown> = {};
+    if (Array.isArray(request.facets) && request.facets.length > 0) {
+      params.facet = request.facets;
+    }
+    if (isDefined(request.filter)) {
+      params.filter = request.filter;
+    }
+    const { data } = await this.client.get<GetEntityFacetsResponse>('/entity-facets', { params });
     return data;
   }
 
