@@ -65,8 +65,8 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     this.client = axios.create({
       baseURL: `${baseUrl.replace(/\/$/, '')}/api/catalog`,
       timeout: 30000, // 30 second timeout
-      // Backstage's filter param uses non-standard `filter=key=value` repetition;
-      // see params-serializer.ts.
+      // Backstage's filter param uses a non-standard comma-joined `key=value` shape inside
+      // a single `filter=` token (AND across keys, OR within key); see params-serializer.ts.
       paramsSerializer: backstageParamsSerializer,
     });
     logger.debug('Axios client created with base URL', { baseUrl: this.client.defaults.baseURL });

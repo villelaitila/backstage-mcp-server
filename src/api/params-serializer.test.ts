@@ -34,20 +34,48 @@ describe('backstageParamsSerializer', () => {
     expect(qs).toBe('filter=kind%3Dcomponent');
   });
 
-  it('serializes a single filter set with multiple values as repeated filter=key=value params (OR within key)', () => {
+  it('serializes a single filter set with multiple values as one comma-joined filter token (OR within key)', () => {
     const qs = backstageParamsSerializer({ filter: [{ key: 'kind', values: ['component', 'api'] }] });
-    // Each value becomes its own filter=key=value token (matches probe 04: ?filter=kind=component&filter=kind=api).
-    expect(qs).toBe('filter=kind%3Dcomponent&filter=kind%3Dapi');
+    // OR within a key is expressed as repeated `key=value` pairs comma-joined inside one
+    // `filter=` token (canonical Backstage form). The comma is URL-encoded as %2C.
+    expect(qs).toBe('filter=kind%3Dcomponent%2Ckind%3Dapi');
   });
 
-  it('serializes multiple filter sets as repeated filter params', () => {
+  it('serializes multiple filter sets as one comma-joined filter token (AND across keys)', () => {
     const qs = backstageParamsSerializer({
       filter: [
         { key: 'kind', values: ['component'] },
-        { key: 'spec.system', values: ['access'] },
+        { key: 'spec.system', values: ['my-system'] },
       ],
     });
-    expect(qs).toBe('filter=kind%3Dcomponent&filter=spec.system%3Daccess');
+    // AND across keys is expressed by comma-joining `key=value` pairs inside ONE `filter=`
+    // token (canonical Backstage form, probes 04/25).
+    expect(qs).toBe('filter=kind%3Dcomponent%2Cspec.system%3Dmy-system');
+  });
+
+  it('mirrors probe 25: kind=component AND relations.consumesApi=api:default/example-api', () => {
+    const qs = backstageParamsSerializer({
+      filter: [
+        { key: 'kind', values: ['component'] },
+        { key: 'relations.consumesApi', values: ['api:default/example-api'] },
+      ],
+    });
+    // Expected wire form (probe 25 returned 24 components):
+    //   filter=kind=component,relations.consumesApi=api:default/example-api
+    expect(qs).toBe(
+      'filter=kind%3Dcomponent%2Crelations.consumesApi%3Dapi%3Adefault%2Fexample-api'
+    );
+  });
+
+  it('combines AND-across-keys with OR-within-key in one filter token', () => {
+    const qs = backstageParamsSerializer({
+      filter: [
+        { key: 'kind', values: ['component', 'api'] },
+        { key: 'spec.system', values: ['my-system'] },
+      ],
+    });
+    // Single token: kind=component,kind=api,spec.system=my-system
+    expect(qs).toBe('filter=kind%3Dcomponent%2Ckind%3Dapi%2Cspec.system%3Dmy-system');
   });
 
   it('serializes array params other than filter as repeated key=value tokens', () => {

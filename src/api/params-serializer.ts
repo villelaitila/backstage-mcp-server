@@ -15,17 +15,29 @@
 
 /**
  * Backstage's Catalog API expects a non-standard query-string shape for the `filter`
- * parameter: each filter is a `filter=key=value` pair, repeated for OR semantics
- * (probe 04). Axios's default serializer would emit `filter[0][key]=...&filter[0][values][]=...`
- * which Backstage rejects.
+ * parameter. The canonical wire form (probes 04/25) is comma-joined `key=value` pairs
+ * inside a single `filter=` token; comma is the AND-joining operator. Axios's default
+ * serializer would emit `filter[0][key]=...&filter[0][values][]=...` which Backstage
+ * rejects.
  *
  * Other array params (`facet`, `orderField`, `fields`) are emitted as plain repeated
  * `key=value` tokens. Scalar params are emitted as `key=value` in insertion order.
  *
- * Input filter shape: `Array<{ key: string, values: string[] }>`.
- *   - One value      → `filter=key=value`
- *   - Multiple values → `filter=key=v1&filter=key=v2` (OR within key, per probe 04)
- *   - Multiple sets   → `filter=k1=v1&filter=k2=v2` (OR across sets)
+ * Input filter shape: `Array<{ key: string, values: string[] }>` collapses to a single
+ * comma-joined `filter=` token (one HTTP filter set):
+ *   - Outer array entries  → AND across keys (`k1=v1,k2=v2`)
+ *   - Inner `values` items → OR within a key (`k1=v1,k1=v2`) — comma-joined in the same token
+ *
+ * Examples:
+ *   `[{kind:[component]}]`                     → `filter=kind=component`
+ *   `[{kind:[component, api]}]`                → `filter=kind=component,kind=api`
+ *   `[{kind:[component]},{spec.system:[my-system]}]`
+ *                                              → `filter=kind=component,spec.system=my-system`
+ *   `[{kind:[component]},{relations.consumesApi:[api:default/example-api]}]`
+ *                                              → `filter=kind=component,relations.consumesApi=api:default/example-api`
+ *
+ * Top-level OR (across filter sets) is intentionally not expressible by the input
+ * model; see Strategist Δψ-1 analysis for the rationale (Option 1).
  */
 export interface BackstageFilterSet {
   key: string;
@@ -46,13 +58,21 @@ const isFilterArray = (value: unknown): value is BackstageFilterSet[] =>
 const encode = (s: string): string => encodeURIComponent(s);
 
 const serializeFilter = (filters: BackstageFilterSet[]): string[] => {
-  const tokens: string[] = [];
+  // Collapse the entire filter input to a single comma-joined `filter=` token.
+  // Outer items AND-join across keys; inner `values` OR-join within a key.
+  // Each `key=value` pair is URL-encoded individually before being joined by
+  // an unencoded literal `,` and then the whole token (including commas) is
+  // emitted as one query parameter — i.e., commas are the separator between
+  // pairs and are URL-encoded as %2C by being part of the encoded value passed
+  // to axios's URL assembler.
+  const pairs: string[] = [];
   for (const set of filters) {
     for (const v of set.values) {
-      tokens.push(`filter=${encode(`${set.key}=${v}`)}`);
+      pairs.push(encode(`${set.key}=${v}`));
     }
   }
-  return tokens;
+  if (pairs.length === 0) return [];
+  return [`filter=${pairs.join(encode(','))}`];
 };
 
 const serializeArrayParam = (key: string, arr: unknown[]): string[] =>
