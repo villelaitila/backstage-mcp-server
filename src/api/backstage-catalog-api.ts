@@ -191,14 +191,20 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     }
 
     logger.debug('Fetching entities from API', { limit, offset });
-    const { data } = await this.client.get<GetEntitiesResponse>('/entities', {
+    // Backstage `/entities` returns a bare `Entity[]` array (see docs/api-probe/findings.md
+    // probe 01). Older shims and the @backstage/catalog-client return `{ items: Entity[] }`.
+    // Normalize to `{ items }` here so consumers (incl. getEntitiesJsonApi) see one shape.
+    const { data } = await this.client.get<Entity[] | GetEntitiesResponse>('/entities', {
       params: { ...request, limit, offset },
     });
+    const normalized: GetEntitiesResponse = Array.isArray(data)
+      ? ({ items: data } as unknown as GetEntitiesResponse)
+      : data;
 
     // Cache the result for 2 minutes (shorter TTL for list operations)
-    this.cacheManager.set(cacheKey, data, 2 * 60 * 1000);
-    logger.debug(`Fetched ${data.items?.length || 0} entities from API`);
-    return data;
+    this.cacheManager.set(cacheKey, normalized, 2 * 60 * 1000);
+    logger.debug(`Fetched ${normalized.items?.length || 0} entities from API`);
+    return normalized;
   }
 
   async getEntitiesByRefs(

@@ -139,7 +139,29 @@ describe('BackstageCatalogApi', () => {
       expect(mockClient.get).not.toHaveBeenCalled();
     });
 
-    it('should fetch from API and cache if not cached', async () => {
+    it('should fetch from API and wrap a bare Entity[] response into { items } shape', async () => {
+      const request: GetEntitiesRequest & PaginationParams = { limit: 10, offset: 0 };
+      const bareArray = [
+        { kind: 'Component', apiVersion: 'backstage.io/v1beta1', metadata: { name: 'test' } },
+      ] as unknown as Entity[];
+      mockCacheManager.get.mockReturnValue(undefined);
+      mockedPaginationHelper.normalizeParams.mockReturnValue({ limit: 10, offset: 0, page: 1 });
+      // Real Backstage `/entities` returns a bare array — see docs/api-probe/findings.md probe 01.
+      mockClient.get.mockResolvedValueOnce(axiosResponse<unknown>(bareArray));
+
+      const result = await api.getEntities(request);
+
+      expect(mockClient.get).toHaveBeenCalledWith('/entities', { params: request });
+      const expectedWrapped = { items: bareArray } as unknown as GetEntitiesResponse;
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        `entities:${JSON.stringify(request)}`,
+        expectedWrapped,
+        120000
+      );
+      expect(result).toEqual(expectedWrapped);
+    });
+
+    it('should pass through a response already shaped as { items: [...] }', async () => {
       const request: GetEntitiesRequest & PaginationParams = { limit: 10, offset: 0 };
       mockCacheManager.get.mockReturnValue(undefined);
       mockedPaginationHelper.normalizeParams.mockReturnValue({ limit: 10, offset: 0, page: 1 });
@@ -147,9 +169,8 @@ describe('BackstageCatalogApi', () => {
 
       const result = await api.getEntities(request);
 
-      expect(mockClient.get).toHaveBeenCalledWith('/entities', { params: request });
+      expect(result).toEqual(mockResponse);
       expect(mockCacheManager.set).toHaveBeenCalledWith(`entities:${JSON.stringify(request)}`, mockResponse, 120000);
-      expect(result).toBe(mockResponse);
     });
   });
 
