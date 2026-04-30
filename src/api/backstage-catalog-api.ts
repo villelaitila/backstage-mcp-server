@@ -429,7 +429,13 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     locationRef: string,
     _options?: CatalogRequestOptions
   ): Promise<ValidateEntityResponse> {
-    const { data } = await this.client.post<ValidateEntityResponse>('/validate-entity', { entity, locationRef });
+    // Backstage's POST /validate-entity expects body `{ entity, location }`. The MCP-side
+    // parameter name (`locationRef`) is preserved for LLM-facing clarity, but the wire payload
+    // must use `location` (probe 30 returns 400 InputError when key is `locationRef`).
+    const { data } = await this.client.post<ValidateEntityResponse>('/validate-entity', {
+      entity,
+      location: locationRef,
+    });
     return data;
   }
 

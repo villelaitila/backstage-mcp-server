@@ -471,12 +471,14 @@ describe('BackstageCatalogApi', () => {
     const locationRef = 'url:http://example.com';
     const mockResponse: ValidateEntityResponse = { valid: true };
 
-    it('should post to /validate-entity and return data', async () => {
+    it('should post to /validate-entity with body key `location` (not `locationRef`)', async () => {
       mockClient.post.mockResolvedValueOnce(axiosResponse<ValidateEntityResponse>(mockResponse));
 
       const result = await api.validateEntity(entity, locationRef);
 
-      expect(mockClient.post).toHaveBeenCalledWith('/validate-entity', { entity, locationRef });
+      // Backstage's POST /validate-entity expects `{ entity, location }` per OpenAPI; sending
+      // `locationRef` returns HTTP 400 InputError (probe 30). Probe 18/29 succeed with `location`.
+      expect(mockClient.post).toHaveBeenCalledWith('/validate-entity', { entity, location: locationRef });
       expect(result).toBe(mockResponse);
     });
   });
