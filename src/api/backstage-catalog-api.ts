@@ -45,6 +45,7 @@ import { logger } from '../utils/core/logger.js';
 import { EntityRef } from '../utils/formatting/entity-ref.js';
 import { JsonApiFormatter } from '../utils/formatting/jsonapi-formatter.js';
 import { PaginationHelper } from '../utils/formatting/pagination-helper.js';
+import { backstageParamsSerializer } from './params-serializer.js';
 
 interface BackstageCatalogApiOptions {
   baseUrl: string;
@@ -64,6 +65,9 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     this.client = axios.create({
       baseURL: `${baseUrl.replace(/\/$/, '')}/api/catalog`,
       timeout: 30000, // 30 second timeout
+      // Backstage's filter param uses non-standard `filter=key=value` repetition;
+      // see params-serializer.ts.
+      paramsSerializer: backstageParamsSerializer,
     });
     logger.debug('Axios client created with base URL', { baseUrl: this.client.defaults.baseURL });
 

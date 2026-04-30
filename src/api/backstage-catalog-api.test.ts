@@ -107,11 +107,14 @@ describe('BackstageCatalogApi', () => {
   });
 
   describe('constructor', () => {
-    it('should initialize with correct base URL and auth', () => {
-      expect(mockedAxios.create).toHaveBeenCalledWith({
-        baseURL: `${baseUrl}/api/catalog`,
-        timeout: 30000,
-      });
+    it('should initialize with correct base URL, timeout, and Backstage params serializer', () => {
+      expect(mockedAxios.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseURL: `${baseUrl}/api/catalog`,
+          timeout: 30000,
+          paramsSerializer: expect.any(Function),
+        })
+      );
       expect(mockClient.interceptors.request.use).toHaveBeenCalled();
     });
   });
