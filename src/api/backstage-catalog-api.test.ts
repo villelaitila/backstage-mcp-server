@@ -432,13 +432,43 @@ describe('BackstageCatalogApi', () => {
     const location: AddLocationRequest = { type: 'url', target: 'http://example.com' };
     const mockResponse = { location: { type: 'url', target: 'http://example.com' } } as unknown as AddLocationResponse;
 
-    it('should post to /locations and return data', async () => {
+    it('should POST /locations with body { type, target } and no dryRun query when omitted', async () => {
       mockClient.post.mockResolvedValueOnce(axiosResponse<AddLocationResponse>(mockResponse));
 
       const result = await api.addLocation(location);
 
-      expect(mockClient.post).toHaveBeenCalledWith('/locations', location);
+      // Body must contain only { type, target }; dryRun is a query string param, not a body field.
+      expect(mockClient.post).toHaveBeenCalledWith(
+        '/locations',
+        { type: 'url', target: 'http://example.com' },
+        expect.objectContaining({ params: expect.objectContaining({ dryRun: undefined }) })
+      );
       expect(result).toBe(mockResponse);
+    });
+
+    it('should POST /locations with dryRun=true forwarded as a string query param', async () => {
+      mockClient.post.mockResolvedValueOnce(axiosResponse<AddLocationResponse>(mockResponse));
+
+      await api.addLocation({ ...location, dryRun: true } as AddLocationRequest);
+
+      // Backstage encodes dryRun as a query string boolean ("true"/"false").
+      expect(mockClient.post).toHaveBeenCalledWith(
+        '/locations',
+        { type: 'url', target: 'http://example.com' },
+        expect.objectContaining({ params: expect.objectContaining({ dryRun: 'true' }) })
+      );
+    });
+
+    it('should POST /locations with dryRun=false omitted from query (only forward when true)', async () => {
+      mockClient.post.mockResolvedValueOnce(axiosResponse<AddLocationResponse>(mockResponse));
+
+      await api.addLocation({ ...location, dryRun: false } as AddLocationRequest);
+
+      expect(mockClient.post).toHaveBeenCalledWith(
+        '/locations',
+        { type: 'url', target: 'http://example.com' },
+        expect.objectContaining({ params: expect.objectContaining({ dryRun: undefined }) })
+      );
     });
   });
 

@@ -59,6 +59,23 @@ describe('AddLocationTool', () => {
       expect(responseData.data).toEqual(expectedResponse);
     });
 
+    it('should forward the dryRun flag through to the catalog client unchanged', async () => {
+      const request = {
+        type: 'url',
+        target: 'https://example.com/catalog-info.yaml',
+        dryRun: true,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockCatalogClient.addLocation.mockResolvedValueOnce({ id: 'loc-dry' } as any);
+
+      await AddLocationTool.execute(request, mockContext);
+
+      // The tool must hand the full request object (including dryRun) to the catalog client so
+      // the API layer can map it onto the query string.
+      expect(mockCatalogClient.addLocation).toHaveBeenCalledWith(request);
+    });
+
     it('should handle errors from the catalog client', async () => {
       const request = {
         type: 'github',

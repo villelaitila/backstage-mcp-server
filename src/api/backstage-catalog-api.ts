@@ -413,7 +413,15 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
   }
 
   async addLocation(location: AddLocationRequest, _options?: CatalogRequestOptions): Promise<AddLocationResponse> {
-    const { data } = await this.client.post<AddLocationResponse>('/locations', location);
+    // Backstage's POST /locations carries dryRun on the query string (?dryRun=true), not in the
+    // body. Sending dryRun inside the JSON body is silently ignored. Only forward the flag when
+    // explicitly true so the wire shape stays minimal.
+    const { type = 'url', target, dryRun } = location;
+    const { data } = await this.client.post<AddLocationResponse>(
+      '/locations',
+      { type, target },
+      { params: { dryRun: dryRun === true ? 'true' : undefined } }
+    );
     return data;
   }
 

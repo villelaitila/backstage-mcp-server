@@ -27,6 +27,9 @@ import { ToolErrorHandler } from '../utils/tools/tool-error-handler.js';
 const paramsSchema = z.object({
   type: z.string().optional(),
   target: z.string(),
+  // dryRun lets callers validate a location without persisting it. Backstage forwards the flag
+  // as a `?dryRun=true` query string param; the API client maps it through.
+  dryRun: z.boolean().optional(),
 });
 
 @Tool({
