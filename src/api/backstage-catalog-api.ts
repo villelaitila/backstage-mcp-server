@@ -211,9 +211,59 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     request: GetEntitiesByRefsRequest,
     _options?: CatalogRequestOptions
   ): Promise<GetEntitiesByRefsResponse> {
-    const { entityRefs } = request;
-    const { data } = await this.client.post<GetEntitiesByRefsResponse>('/entities/by-refs', { entityRefs });
-    return data;
+    // Mirror @backstage/catalog-client: POST /entities/by-refs accepts `fields` in the body and
+    // `filter` as a query param, and ref lists must be chunked to avoid exceeding request size
+    // limits. Backstage also returns `null` for refs that did not match — normalize those to
+    // `undefined` so consumers can fall back with `?? defaults` cleanly.
+    const { entityRefs, fields, filter } = request;
+    const chunks = BackstageCatalogApi.splitRefsIntoChunks(entityRefs);
+    const params: Record<string, unknown> = {};
+    if (isDefined(filter)) params.filter = filter;
+    const config = { params };
+
+    const items: GetEntitiesByRefsResponse['items'] = [];
+    for (const chunk of chunks) {
+      const body: Record<string, unknown> = { entityRefs: chunk };
+      if (isDefined(fields)) body.fields = fields;
+      const { data } = await this.client.post<GetEntitiesByRefsResponse>('/entities/by-refs', body, config);
+      for (const item of data.items ?? []) {
+        items.push((item ?? undefined) as GetEntitiesByRefsResponse['items'][number]);
+      }
+    }
+    return { items };
+  }
+
+  /**
+   * Split a list of entity refs into chunks bounded by both count and serialized byte size,
+   * matching @backstage/catalog-client's splitter (utils.cjs.js). Returns at least one chunk
+   * for non-empty input.
+   */
+  private static splitRefsIntoChunks(
+    refs: string[],
+    maxCountPerChunk = 1000,
+    maxStringLengthPerChunk = 90 * 1024,
+    extraStringLengthPerRef = 3
+  ): string[][] {
+    if (!refs.length) return [];
+    const chunks: string[][] = [];
+    let chunkStart = 0;
+    let chunkLength = 0;
+    let chunkSize = 0;
+    for (let i = 0; i < refs.length; ++i) {
+      const refLength = refs[i].length + extraStringLengthPerRef;
+      if (chunkSize > 0) {
+        if (chunkLength + refLength > maxStringLengthPerChunk || chunkSize + 1 > maxCountPerChunk) {
+          chunks.push(refs.slice(chunkStart, i));
+          chunkStart = i;
+          chunkLength = 0;
+          chunkSize = 0;
+        }
+      }
+      chunkLength += refLength;
+      chunkSize += 1;
+    }
+    chunks.push(refs.slice(chunkStart, refs.length));
+    return chunks;
   }
 
   async queryEntities(

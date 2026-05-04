@@ -175,18 +175,108 @@ describe('BackstageCatalogApi', () => {
   });
 
   describe('getEntitiesByRefs', () => {
-    const request: GetEntitiesByRefsRequest = { entityRefs: ['component:default/test'] };
     const mockResponse = {
       items: [{ kind: 'Component', apiVersion: 'backstage.io/v1beta1', metadata: { name: 'test' } }],
     } as unknown as GetEntitiesByRefsResponse;
 
-    it('should post to /entities/by-refs and return data', async () => {
+    it('should POST /entities/by-refs with only entityRefs in body when no fields/filter given', async () => {
+      const request: GetEntitiesByRefsRequest = { entityRefs: ['component:default/test'] };
       mockClient.post.mockResolvedValueOnce(axiosResponse(mockResponse));
 
       const result = await api.getEntitiesByRefs(request);
 
-      expect(mockClient.post).toHaveBeenCalledWith('/entities/by-refs', { entityRefs: request.entityRefs });
-      expect(result).toBe(mockResponse);
+      // No fields → body must not contain a fields key (Backstage rejects empty arrays).
+      expect(mockClient.post).toHaveBeenCalledWith(
+        '/entities/by-refs',
+        { entityRefs: request.entityRefs },
+        expect.any(Object)
+      );
+      expect(result).toEqual(mockResponse);
+    });
+
+    it('should include fields in the POST body when provided', async () => {
+      const request: GetEntitiesByRefsRequest = {
+        entityRefs: ['component:default/test'],
+        fields: ['metadata.name', 'kind'],
+      };
+      mockClient.post.mockResolvedValueOnce(axiosResponse(mockResponse));
+
+      await api.getEntitiesByRefs(request);
+
+      // Backstage's /entities/by-refs accepts `fields` inside the JSON body (not query string).
+      const callArgs = mockClient.post.mock.calls[0];
+      expect(callArgs[0]).toBe('/entities/by-refs');
+      expect(callArgs[1]).toEqual({
+        entityRefs: ['component:default/test'],
+        fields: ['metadata.name', 'kind'],
+      });
+    });
+
+    it('should pass filter through as a query param (not in body)', async () => {
+      const filter = [{ key: 'kind', values: ['component'] }];
+      const request: GetEntitiesByRefsRequest = {
+        entityRefs: ['component:default/test'],
+        filter: filter as unknown as GetEntitiesByRefsRequest['filter'],
+      };
+      mockClient.post.mockResolvedValueOnce(axiosResponse(mockResponse));
+
+      await api.getEntitiesByRefs(request);
+
+      const callArgs = mockClient.post.mock.calls[0];
+      // filter belongs on the query string (mirrors @backstage/catalog-client behavior).
+      expect(callArgs[1]).not.toHaveProperty('filter');
+      expect(callArgs[2]).toEqual(expect.objectContaining({ params: expect.objectContaining({ filter }) }));
+    });
+
+    it('should split large ref lists into chunks of at most 1000 refs per POST', async () => {
+      const refs = Array.from({ length: 1500 }, (_, i) => `component:default/c${i}`);
+      const request: GetEntitiesByRefsRequest = { entityRefs: refs };
+      // Two empty result chunks; we only care about the call shape here.
+      mockClient.post.mockResolvedValue(axiosResponse({ items: [] } as unknown as GetEntitiesByRefsResponse));
+
+      await api.getEntitiesByRefs(request);
+
+      // 1500 refs → at most one chunk of 1000 plus a chunk of 500. Two POSTs.
+      expect(mockClient.post).toHaveBeenCalledTimes(2);
+      const firstChunk = (mockClient.post.mock.calls[0][1] as { entityRefs: string[] }).entityRefs;
+      const secondChunk = (mockClient.post.mock.calls[1][1] as { entityRefs: string[] }).entityRefs;
+      expect(firstChunk.length).toBeLessThanOrEqual(1000);
+      expect(firstChunk.length + secondChunk.length).toBe(1500);
+    });
+
+    it('should concatenate items across multiple chunked responses', async () => {
+      const refs = Array.from({ length: 1200 }, (_, i) => `component:default/c${i}`);
+      const request: GetEntitiesByRefsRequest = { entityRefs: refs };
+      const e = (n: string): Entity =>
+        ({ kind: 'Component', apiVersion: 'backstage.io/v1beta1', metadata: { name: n } }) as unknown as Entity;
+      mockClient.post
+        .mockResolvedValueOnce(axiosResponse({ items: [e('a'), e('b')] } as unknown as GetEntitiesByRefsResponse))
+        .mockResolvedValueOnce(axiosResponse({ items: [e('c')] } as unknown as GetEntitiesByRefsResponse));
+
+      const result = await api.getEntitiesByRefs(request);
+
+      expect(result.items).toHaveLength(3);
+      expect(result.items.map((i) => (i as Entity).metadata.name)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should normalize null entries returned for missing refs into undefined', async () => {
+      const refs = ['component:default/exists', 'component:default/missing'];
+      const request: GetEntitiesByRefsRequest = { entityRefs: refs };
+      const found = {
+        kind: 'Component',
+        apiVersion: 'backstage.io/v1beta1',
+        metadata: { name: 'exists' },
+      } as unknown as Entity;
+      // Backstage returns `null` in the items array for refs that don't exist; the wrapper
+      // must normalize those to `undefined` so downstream consumers can use `?? defaults`.
+      mockClient.post.mockResolvedValueOnce(
+        axiosResponse({ items: [found, null] } as unknown as GetEntitiesByRefsResponse)
+      );
+
+      const result = await api.getEntitiesByRefs(request);
+
+      expect(result.items[0]).toBe(found);
+      expect(result.items[1]).toBeUndefined();
     });
   });
 

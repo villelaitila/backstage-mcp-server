@@ -34,6 +34,9 @@ const compoundEntityRefSchema = z.object({
 
 const paramsSchema = z.object({
   entityRefs: z.array(z.union([z.string(), compoundEntityRefSchema])),
+  // Optional projection — when provided, Backstage returns only the listed dotted paths
+  // (e.g. ["metadata.name", "kind"]) per entity, dramatically reducing payload size for LLMs.
+  fields: z.array(z.string()).optional(),
 });
 
 @Tool({
@@ -53,6 +56,7 @@ export class GetEntitiesByRefsTool {
         const entityRefs = args.entityRefs.map((ref) => (isString(ref) ? ref : EntityRef.toString(ref)));
         const result = await ctx.catalogClient.getEntitiesByRefs({
           entityRefs,
+          ...(args.fields ? { fields: args.fields } : {}),
         });
         return JsonToTextResponse({ status: ApiStatus.SUCCESS, data: result });
       },
