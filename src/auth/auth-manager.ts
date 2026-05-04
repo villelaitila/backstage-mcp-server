@@ -73,6 +73,10 @@ export class AuthManager {
    */
   private isTokenValid(): boolean {
     if (isNullOrUndefined(this.tokenInfo)) return false;
+
+    // Always re-read file-based tokens (they may have been refreshed externally)
+    if (isNonEmptyString(this.config.tokenFile)) return false;
+
     if (isNullOrUndefined(this.tokenInfo.expiresAt)) return true;
 
     // Refresh 5 minutes before expiry
