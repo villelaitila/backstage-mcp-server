@@ -291,10 +291,11 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
     request: GetEntityAncestorsRequest,
     _options?: CatalogRequestOptions
   ): Promise<GetEntityAncestorsResponse> {
-    const { entityRef } = request;
-    const { data } = await this.client.get<GetEntityAncestorsResponse>(
-      `/entities/by-name/${encodeURIComponent(entityRef)}/ancestry`
-    );
+    // Backstage's real ancestry path is /entities/by-name/{kind}/{namespace}/{name}/ancestry
+    // with three individually-encoded segments. A single encoded compound ref returns 404.
+    const compound = EntityRef.parse(request.entityRef);
+    const path = `/entities/by-name/${encodeURIComponent(compound.kind)}/${encodeURIComponent(compound.namespace)}/${encodeURIComponent(compound.name)}/ancestry`;
+    const { data } = await this.client.get<GetEntityAncestorsResponse>(path);
     return data;
   }
 

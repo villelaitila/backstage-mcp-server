@@ -257,14 +257,16 @@ describe('BackstageCatalogApi', () => {
     const request: GetEntityAncestorsRequest = { entityRef: 'component:default/test' };
     const mockResponse = { items: [], rootEntityRef: request.entityRef } as unknown as GetEntityAncestorsResponse;
 
-    it('should get from /entities/by-name/.../ancestry and return data', async () => {
+    it('should GET /entities/by-name/{kind}/{namespace}/{name}/ancestry with split path segments', async () => {
+      // Backstage's real ancestry path takes three split, individually-encoded segments
+      // — mirroring getEntityByRef / getLocationByEntity. A single encoded compound ref
+      // returns 404 against the live API.
+      mockedEntityRef.parse.mockReturnValue({ kind: 'component', namespace: 'default', name: 'test' });
       mockClient.get.mockResolvedValueOnce(axiosResponse(mockResponse));
 
       const result = await api.getEntityAncestors(request);
 
-      expect(mockClient.get).toHaveBeenCalledWith(
-        `/entities/by-name/${encodeURIComponent(request.entityRef)}/ancestry`
-      );
+      expect(mockClient.get).toHaveBeenCalledWith('/entities/by-name/component/default/test/ancestry');
       expect(result).toBe(mockResponse);
     });
   });
