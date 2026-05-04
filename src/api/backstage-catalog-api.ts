@@ -386,11 +386,22 @@ export class BackstageCatalogApi implements IBackstageCatalogApi {
   }
 
   async getLocationByRef(locationRef: string, _options?: CatalogRequestOptions): Promise<Location | undefined> {
+    // Backstage exposes no /locations/by-ref endpoint. Mirror @backstage/catalog-client's
+    // implementation: list /locations and filter client-side by the stringified ref
+    // (`${type}:${target}`). Some Backstage versions wrap items as `{ data: Location }`,
+    // others return a bare Location[]; handle both shapes.
     try {
-      const { data } = await this.client.get<Location>(`/locations/by-ref/${encodeURIComponent(locationRef)}`);
-      return data;
+      const { data: items } = await this.client.get<Array<Location | { data: Location }>>('/locations');
+      const locations = items.map((item) =>
+        item && typeof item === 'object' && 'data' in item && (item as { data: Location }).data
+          ? (item as { data: Location }).data
+          : (item as Location)
+      );
+      // stringifyLocationRef from @backstage/catalog-model is `${type}:${target}` —
+      // inlined here to avoid ESM/CJS interop issues in tests.
+      return locations.find((l) => l && `${l.type}:${l.target}` === locationRef);
     } catch (error) {
-      logger.error('Error fetching location by ref', {
+      logger.error('Error listing locations for getLocationByRef', {
         locationRef,
         error: error instanceof Error ? error.message : String(error),
       });

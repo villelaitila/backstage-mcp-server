@@ -31,7 +31,10 @@ const entityFilterSchema = z.object({
 
 const entityOrderSchema = z.object({
   field: z.string(),
-  order: z.enum(['asc', 'desc']).optional(),
+  // `order` is required by Backstage's `EntityOrderQuery` (canonical client). Default to 'asc'
+  // for callers that omit it, so the schema is forgiving on input but always produces a valid
+  // value for the wire layer.
+  order: z.enum(['asc', 'desc']).default('asc'),
 });
 
 const paramsSchema = z.object({

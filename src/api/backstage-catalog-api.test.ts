@@ -392,23 +392,35 @@ describe('BackstageCatalogApi', () => {
   });
 
   describe('getLocationByRef', () => {
-    const locationRef = 'url:http://example.com';
-    const mockLocation = { type: 'url', target: 'http://example.com' } as unknown as Location;
+    // Backstage has no /locations/by-ref endpoint. The wrapper mirrors
+    // @backstage/catalog-client: list /locations and filter client-side
+    // by stringified ref (`${type}:${target}`).
+    const matching = { id: 'a', type: 'url', target: 'http://example.com' } as unknown as Location;
+    const other = { id: 'b', type: 'url', target: 'http://other.example.com' } as unknown as Location;
 
-    it('should get location by ref', async () => {
-      mockClient.get.mockResolvedValueOnce(axiosResponse<Location>(mockLocation));
+    it('lists /locations and finds the match by stringified ref', async () => {
+      mockClient.get.mockResolvedValueOnce(axiosResponse<Location[]>([other, matching]));
 
-      const result = await api.getLocationByRef(locationRef);
+      const result = await api.getLocationByRef('url:http://example.com');
 
-      expect(mockClient.get).toHaveBeenCalledWith(`/locations/by-ref/${encodeURIComponent(locationRef)}`);
-      expect(result).toBe(mockLocation);
+      expect(mockClient.get).toHaveBeenCalledWith('/locations');
+      expect(result).toBe(matching);
     });
 
-    it('should return undefined on 404', async () => {
-      const error = { response: { status: 404 } };
-      mockClient.get.mockRejectedValue(error);
+    it('handles wrapped { data: Location } items returned by some Backstage versions', async () => {
+      mockClient.get.mockResolvedValueOnce(
+        axiosResponse<Array<{ data: Location }>>([{ data: other }, { data: matching }])
+      );
 
-      const result = await api.getLocationByRef(locationRef);
+      const result = await api.getLocationByRef('url:http://example.com');
+
+      expect(result).toBe(matching);
+    });
+
+    it('returns undefined when no location matches the ref', async () => {
+      mockClient.get.mockResolvedValueOnce(axiosResponse<Location[]>([other]));
+
+      const result = await api.getLocationByRef('url:http://nowhere.example.com');
 
       expect(result).toBeUndefined();
     });
