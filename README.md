@@ -93,7 +93,8 @@ The server requires environment variables for Backstage API access:
 
 Choose one of the following authentication methods:
 
-- `BACKSTAGE_TOKEN` - Bearer token for API access
+- `BACKSTAGE_TOKEN` - Bearer token for API access (static)
+- `BACKSTAGE_TOKEN_FILE` - Path to a file containing the bearer token. Re-read on every request, so the token can be rotated externally without restarting the server. Takes precedence over `BACKSTAGE_TOKEN` when both are set.
 - `BACKSTAGE_CLIENT_ID`, `BACKSTAGE_CLIENT_SECRET`, `BACKSTAGE_TOKEN_URL` - OAuth credentials
 - `BACKSTAGE_API_KEY` - API key authentication
 - `BACKSTAGE_SERVICE_ACCOUNT_KEY` - Service account key
