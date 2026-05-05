@@ -21,16 +21,16 @@ This allows LLMs to interact with Backstage software catalogs through a standard
 
 - `get_entity_by_ref` - Get a single entity by reference
 - `get_entities` - Query entities with filters
-- `get_entities_by_query` - Advanced entity querying with ordering
-- `get_entities_by_refs` - Get multiple entities by references
+- `get_entities_by_query` - Advanced entity querying with ordering and cursor pagination
+- `get_entities_by_refs` - Get multiple entities by references (supports `fields` projection; large batches are auto-chunked)
 - `get_entity_ancestors` - Get entity ancestry tree
 - `get_entity_facets` - Get entity facet statistics
 
 ### Location Management
 
-- `get_location_by_ref` - Get location by reference
+- `get_location_by_ref` - Get location by ref string (lists `/locations` and filters client-side; mirrors `@backstage/catalog-client`)
 - `get_location_by_entity` - Get location associated with an entity
-- `add_location` - Create a new location
+- `add_location` - Create a new location (supports `dryRun: true` for validation without persisting)
 - `remove_location_by_id` - Delete a location
 
 ### Entity Operations
@@ -172,6 +172,26 @@ All tools accept parameters as defined by their Zod schemas. Entity references c
 
 - String: `"component:default/user-service"`
 - Object: `{ kind: "component", namespace: "default", name: "user-service" }`
+
+### Filter Syntax
+
+Tools accepting a `filter` parameter use the canonical Backstage form:
+
+- The outer array is **AND across keys** — multiple sets are joined into one `filter=` token with commas.
+- The `values` array is **OR within a key** — multiple values for the same key.
+
+Example: components consuming a specific API:
+
+```json
+{
+  "filter": [
+    { "key": "kind", "values": ["Component"] },
+    { "key": "relations.consumesApi", "values": ["api:default/my-api"] }
+  ]
+}
+```
+
+…produces `?filter=kind=Component,relations.consumesApi=api:default/my-api` (single AND-token).
 
 ### Response Format
 
